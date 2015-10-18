@@ -17,6 +17,7 @@ module OffsitePayments #:nodoc:
         mapping :scid, 'scid'
         mapping :shopId, 'shopId'
         mapping :shopArticleId, 'shopArticleId'
+        mapping :paymentType, 'paymentType'
       end
     end
   end

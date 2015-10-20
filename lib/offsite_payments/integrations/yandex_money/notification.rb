@@ -4,9 +4,13 @@ module OffsitePayments #:nodoc:
   module Integrations #:nodoc:
     module YandexMoney
       class Notification < OffsitePayments::Notification
+        attr_accessor :message, :tech_message
+
         def initialize(post, options = {})
           super
           @response_code = '200'
+          @message = ''
+          @tech_message = ''
         end
 
         def complete?
@@ -62,6 +66,8 @@ module OffsitePayments #:nodoc:
               'pending'
             when 'paymentAviso'
               'completed'
+            when 'cancelOrder'
+              'canceled'
             else 'unknown'
           end
         end
@@ -72,7 +78,8 @@ module OffsitePayments #:nodoc:
           dt = Time.now.iso8601
           "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
               "<#{method}Response performedDatetime=\"#{dt}\" code=\"#{@response_code}\"" +
-              " invoiceId=\"#{transaction_id}\" shopId=\"#{shop_id}\"/>"
+              " invoiceId=\"#{transaction_id}\" shopId=\"#{shop_id}\"" + 
+              " message=\"#{message}\" techMessage=\"#{tech_message}\"/>"
         end
 
         # Acknowledge the transaction to YandexMoney. This method has to be called after a new

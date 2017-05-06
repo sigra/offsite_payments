@@ -1,6 +1,7 @@
 module OffsitePayments #:nodoc:
   module Integrations #:nodoc:
-    module Universal
+    module Paytm
+    
       def self.notification(post, options = {})
         Notification.new(post, options)
       end
@@ -10,7 +11,7 @@ module OffsitePayments #:nodoc:
       end
 
       def self.sign(fields, key)
-        OpenSSL::HMAC.hexdigest(OpenSSL::Digest::SHA256.new, key, fields.sort.join)
+        Base64.encode64(OpenSSL::HMAC.digest(OpenSSL::Digest::SHA256.new, key, fields.sort.join)).delete("\n")
       end
 
       class Helper < OffsitePayments::Helper
@@ -47,22 +48,18 @@ module OffsitePayments #:nodoc:
         }
 
         def initialize(order, account, options = {})
-          @forward_url = options[:forward_url]
+          mid_param = { MID: account }.to_query
+          @forward_url_stag = "https://pguat.paytm.com/oltp-web/genericPT?#{mid_param}"
+          @forward_url_prod = "https://secure.paytm.in/oltp-web/genericPT?#{mid_param}"
           @key = options[:credential2]
           @currency = options[:currency]
 
-          # x_credential3 should not be included in the request when using the universal offsite dev kit.
-          options[:credential3] = nil if options[:credential3] == @forward_url
-
           super
-          self.country = options[:country]
-          self.account_name = options[:account_name]
-          self.transaction_type = options[:transaction_type]
           add_field 'x_test', @test.to_s
         end
 
         def credential_based_url
-          @forward_url
+          @test ?  @forward_url_stag : @forward_url_prod
         end
 
         def form_fields
@@ -78,47 +75,19 @@ module OffsitePayments #:nodoc:
         end
 
         def generate_signature
-          fields_to_sign = @fields.select { |key, _| key.start_with?('x_') && key != 'x_signature' }
-          Universal.sign(fields_to_sign, @key)
+          Paytm.sign(@fields, @key)
         end
 
         mapping :account,          'x_account_id'
         mapping :currency,         'x_currency'
         mapping :order,            'x_reference'
-        mapping :country,          'x_shop_country'
-        mapping :account_name,     'x_shop_name'
-        mapping :transaction_type, 'x_transaction_type'
         mapping :description,      'x_description'
         mapping :invoice,          'x_invoice'
         mapping :credential3,      'x_credential3'
         mapping :credential4,      'x_credential4'
 
-        mapping :customer, :first_name => 'x_customer_first_name',
-                           :last_name  => 'x_customer_last_name',
-                           :email      => 'x_customer_email',
+        mapping :customer, :email      => 'x_customer_email',
                            :phone      => 'x_customer_phone'
-
-        mapping :billing_address, :first_name => 'x_customer_billing_first_name',
-                                  :last_name =>  'x_customer_billing_last_name',
-                                  :city =>       'x_customer_billing_city',
-                                  :company =>    'x_customer_billing_company',
-                                  :address1 =>   'x_customer_billing_address1',
-                                  :address2 =>   'x_customer_billing_address2',
-                                  :state =>      'x_customer_billing_state',
-                                  :zip =>        'x_customer_billing_zip',
-                                  :country =>    'x_customer_billing_country',
-                                  :phone =>      'x_customer_billing_phone'
-
-        mapping :shipping_address, :first_name => 'x_customer_shipping_first_name',
-                                   :last_name =>  'x_customer_shipping_last_name',
-                                   :city =>       'x_customer_shipping_city',
-                                   :company =>    'x_customer_shipping_company',
-                                   :address1 =>   'x_customer_shipping_address1',
-                                   :address2 =>   'x_customer_shipping_address2',
-                                   :state =>      'x_customer_shipping_state',
-                                   :zip =>        'x_customer_shipping_zip',
-                                   :country =>    'x_customer_shipping_country',
-                                   :phone =>      'x_customer_shipping_phone'
 
         mapping        :notify_url, 'x_url_callback'
         mapping        :return_url, 'x_url_complete'
@@ -140,7 +109,7 @@ module OffsitePayments #:nodoc:
 
         def acknowledge(authcode = nil)
           signature = @params['x_signature']
-          signature && signature.casecmp(generate_signature) == 0
+          signature == generate_signature ? true : false
         end
 
         def item_id
@@ -176,7 +145,7 @@ module OffsitePayments #:nodoc:
 
         def generate_signature
           signature_params = @params.select { |k| k.start_with? 'x_' }.reject { |k| k == 'x_signature' }
-          Universal.sign(signature_params, @key)
+          Paytm.sign(signature_params, @key)
         end
       end
 
